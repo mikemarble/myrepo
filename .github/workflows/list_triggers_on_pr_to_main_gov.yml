@@ -1,0 +1,53 @@
+name: list_triggers_on_pr_to_main_gov
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: main
+
+env:
+  TENANT_ID: e17c0f0c-6ff0-4c72-9fa8-b5aa41b420e8
+  SUBSCRIPTION_ID: a793e3af-d8ae-490f-9e17-a5b33025f02d
+  CLIENT_ID: ${{ secrets.client_id }}
+  CLIENT_SECRET: ${{ secrets.client_secret }}
+  RESOURCE_GROUP_NAME: santaana
+  FACTORY_NAME: adf-santaana-prod
+  
+jobs:
+  list-triggers:
+    runs-on: [ubuntu-latest]
+    steps:
+    # Log into Azure
+    - uses: azure/login@v1
+      with:
+        creds: '{"clientId":"${{ env.CLIENT_ID }}","clientSecret":"${{ env.CLIENT_SECRET }}","subscriptionId":"${{ env.SUBSCRIPTION_ID }}","tenantId":"${{ env.TENANT_ID }}"}'
+        environment: 'AzureUSGovernment'
+    # Get active trigger info from the target factory
+    - name: Get triggers
+      shell: pwsh
+      run: |
+        $triggersAdfJson = az datafactory trigger list --resource-group ${{ env.RESOURCE_GROUP_NAME }} --factory-name ${{ env.FACTORY_NAME }}
+        $triggersAdfObject = $triggersAdfJson | ConvertFrom-Json
+        $startedTriggerObject = $triggersAdfObject | ForEach-Object { IF($_.properties.runtimeState -eq "Started") { $_.name } }
+        $startedTriggerCSV = $startedTriggerObject -join ","
+        echo $startedTriggerCSV
+        echo "TRIGGER_STARTED_CSV='$startedTriggerCSV'" >> $Env:GITHUB_OUTPUT
+      id: pausing-triggers
+
+    - run: echo "csv list- ${{steps.pausing-triggers.outputs.TRIGGER_STARTED_CSV}} "
+    - run: echo ${{ env.GITHUB_OUTPUT }}
+
+    # Update PR with active trigger info for reference
+    - name: Update PR 
+      uses: actions/github-script@v6
+      env:
+        STDOUT: "```${{steps.pausing-triggers.outputs.TRIGGER_STARTED_CSV}}```"
+      with:
+        script: |
+          const output = `<details><summary>Currently active trigger names:</summary>\n\n${process.env.STDOUT}\n\n</details>`;
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
