@@ -12,7 +12,8 @@ env:
   CLIENT_SECRET: ${{ secrets.client_secret }}
   RESOURCE_GROUP_NAME: santaana
   FACTORY_NAME: adf-santaana-prod
-  
+permissions:
+  issues: write
 jobs:
   list-triggers:
     runs-on: [ubuntu-latest]
