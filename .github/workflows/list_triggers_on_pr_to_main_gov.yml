@@ -21,7 +21,7 @@ jobs:
     - uses: azure/login@v1
       with:
         creds: '{"clientId":"${{ env.CLIENT_ID }}","clientSecret":"${{ env.CLIENT_SECRET }}","subscriptionId":"${{ env.SUBSCRIPTION_ID }}","tenantId":"${{ env.TENANT_ID }}"}'
-        environment: 'AzureUSGovernment'
+        #environment: 'AzureUSGovernment'
     # Get active trigger info from the target factory
     - name: Get triggers
       shell: pwsh
