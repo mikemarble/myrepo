@@ -23,10 +23,10 @@ jobs:
     with:
       tenant_id: e17c0f0c-6ff0-4c72-9fa8-b5aa41b420e8
       subscription_id: a793e3af-d8ae-490f-9e17-a5b33025f02d
-      source_factory_name: devadf-github
-      source_resource_group_name: devadf
-      target_factory_name: prodadf-github
-      target_resource_group_name: stageadf
+      source_factory_name: adf-santaana
+      source_resource_group_name: santaana
+      target_factory_name: adf-santaana-prod
+      target_resource_group_name: santaana
       
     secrets:
       client_id: ${{ secrets.client_id }}
