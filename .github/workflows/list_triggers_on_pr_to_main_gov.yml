@@ -13,7 +13,7 @@ env:
   RESOURCE_GROUP_NAME: santaana
   FACTORY_NAME: adf-santaana-prod
 permissions:
-  issues: write
+  issues: write-all
 jobs:
   list-triggers:
     runs-on: [ubuntu-latest]
