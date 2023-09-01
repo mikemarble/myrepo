@@ -1,0 +1,196 @@
+name: child_gov_adf_migration
+
+on:
+  #This specifies this is a child github actions
+  workflow_call:
+    inputs:
+      tenant_id:
+        description: 'Tenant ID'
+        required: true
+        type: string
+      subscription_id:
+        description: 'Subscription ID'
+        required: true
+        type: string
+      source_factory_name:
+        description: 'Source Factory Name'
+        required: true
+        type: string
+      source_resource_group_name:
+        description: 'Source Resource Group Name'
+        required: true
+        type: string
+      target_factory_name:
+        description: 'Target Factory Name'
+        required: true
+        type: string
+      target_resource_group_name:
+        description: 'Target Resource Group Name'
+        required: true
+        type: string
+      
+    secrets:
+      client_id:
+        description: 'Client ID'
+        required: true
+      client_secret:
+        description: 'Client Secret'
+        required: true
+      
+
+
+jobs:
+  # This job step will use the azure cli to get the active triggers from the target adf workspace 
+  # and write them to a text file which is saved as a github artifact for later
+  pause_triggers:
+    name: pause_triggers
+    runs-on: [ubuntu-latest]
+    steps:
+    # Log into Azure
+    - uses: azure/login@v1
+      with:
+        creds: '{"clientId":"${{ secrets.CLIENT_ID }}","clientSecret":"${{ secrets.CLIENT_SECRET }}","subscriptionId":"${{ inputs.SUBSCRIPTION_ID }}","tenantId":"${{ inputs.TENANT_ID }}"}'
+        environment: 'AzureUSGovernment'
+    #get active trigger info
+    - name: Get active trigger info and pause triggers
+      id: trigger_info
+      shell: pwsh
+      run: |
+        $triggersAdfJson = az datafactory trigger list --resource-group ${{ inputs.target_resource_group_name }} --factory-name ${{ inputs.target_factory_name }}
+        $triggersAdfObject = $triggersAdfJson | ConvertFrom-Json
+        $startedTriggerObject = $triggersAdfObject | ForEach-Object { IF($_.properties.runtimeState -eq "Started") { $_.name } }
+        $startedTriggerCSV = $startedTriggerObject -join ","
+        echo "TRIGGER_STARTED_CSV='$startedTriggerCSV'" >> $Env:GITHUB_OUTPUT
+    #save active trigger info to text files
+    - name: Save active trigger info to text files
+      shell: pwsh
+      run: |
+        $startedTriggerCSV = ${{ steps.trigger_info.outputs.TRIGGER_STARTED_CSV }}.ToString()
+        $startedTriggerArray = $startedTriggerCSV.split(",")
+        if ($startedTriggerCSV -eq "") {
+          $len = 0
+        } else {
+          $len = $startedTriggerArray.Length
+        } 
+        echo $startedTriggerCSV > active_triggers.txt
+        echo $len > length.txt
+    #pause active triggers
+    - name: Pause active triggers
+      shell: pwsh
+      run: |
+        $startedTriggerCSV = ${{ steps.trigger_info.outputs.TRIGGER_STARTED_CSV }}.ToString()
+        $startedTriggerArray = $startedTriggerCSV.split(",")
+        $len = cat length.txt
+        
+        if ($len -gt 0) {
+          echo "#########################################"
+          echo "Triggers are active - pausing triggers"
+          echo "#########################################"
+          $startedTriggerArray | ForEach-Object { az datafactory trigger stop --resource-group ${{ inputs.target_resource_group_name }} --factory-name ${{ inputs.target_factory_name }} --name $_}
+        }
+    #upload active trigger text files for use later
+    - name: Upload a Build Artifact
+      if: ${{ steps.trigger_info.outputs.TRIGGER_STARTED_CSV != 'n/a'}}
+      uses: actions/upload-artifact@v3
+      with:
+        name: current-triggers-file
+        path: |
+          active_triggers.txt
+          length.txt
+
+
+  # This job will migrate the code from the github branch to the target adf environment
+  # this job runs after the pause triggers job
+  migration:
+    name: migration
+    needs: [pause_triggers] 
+    runs-on: [ubuntu-latest]
+    steps:
+    # Checkout code
+    - uses: actions/checkout@v3
+      with:
+        path: prod
+    # Log into Azure
+    - uses: azure/login@v1
+      with:
+        creds: '{"clientId":"${{ secrets.CLIENT_ID }}","clientSecret":"${{ secrets.CLIENT_SECRET }}","subscriptionId":"${{ inputs.SUBSCRIPTION_ID }}","tenantId":"${{ inputs.TENANT_ID }}"}'
+        enable-AzPSSession: true
+        environment: 'AzureUSGovernment'
+    # Build publish artifact for prod adf, this step is equivalent to pressing the publish button in a adf workspace
+    # this uses the individual files from the collaberation branch and 'compiles' them into the single arm template
+    # that is used for the action migration
+    - name: ADF workspace validate
+      uses: Azure/data-factory-validate-action@v1.1.5
+      with:
+        id: '/subscriptions/${{ inputs.subscription_id }}/resourceGroups/${{ inputs.target_resource_group_name }}/providers/Microsoft.DataFactory/factories/${{ inputs.target_factory_name }}'
+        path: './prod'
+    
+    - name: ADF workspace export
+      uses: Azure/data-factory-export-action@v1.2.0
+      with:
+        id: '/subscriptions/${{ inputs.subscription_id }}/resourceGroups/${{ inputs.target_resource_group_name }}/providers/Microsoft.DataFactory/factories/${{ inputs.target_factory_name }}'
+        path: './prod'
+    
+    # Verify the files were built correctly
+    - run: cat prod/armTemplate/ARMTemplateParametersForFactory.json
+    - run: cat prod/ProdWorkspaceParameterOverrides.json
+
+    # Deploy code generated in the previous validate/publish step to the prod adf workspace
+    # this step also uses the ProdWorkspaceParameterOverrides.yml file which contains override values for the variables 
+    # in the TemplateParametersForWorkspace.json file that have different values between stage and prod, such as the 
+    # key vault information, storage account urls and databricks workspace information.
+    # the Overrides.yml file can be found in the root folder of the main collaberation branch if modifications are required
+    - name: ADF workspace deployment
+      uses: Azure/data-factory-deploy-action@v1.2.0
+      with:
+        resourceGroupName: ${{ inputs.target_resource_group_name }}
+        dataFactoryName: ${{ inputs.target_factory_name }}
+        armTemplateFile: './prod/armTemplate/ARMTemplateForFactory.json'
+        armTemplateParametersFile: './prod/armTemplate/ARMTemplateParametersForFactory.json'
+        additionalParameters: 'prod/ProdWorkspaceParameterOverrides.json'
+
+
+  # This job will restart the triggers that were active when the action was started
+  # this job runs after the migration step
+  start_triggers:
+    name: start_triggers
+    needs: [migration]
+    runs-on: [ubuntu-latest]
+    steps:
+    # Download latest active trigger text file
+    - name: Download a Build Artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: current-triggers-file
+    # Preview triggers for reference
+    - name: Preview active_triggers.txt
+      run: cat active_triggers.txt
+    # Log into Azure
+    - uses: azure/login@v1
+      with:
+        creds: '{"clientId":"${{ secrets.CLIENT_ID }}","clientSecret":"${{ secrets.CLIENT_SECRET }}","subscriptionId":"${{ inputs.SUBSCRIPTION_ID }}","tenantId":"${{ inputs.TENANT_ID }}"}'
+        environment: 'AzureUSGovernment'
+    # Using the active triggers text file turn on triggers after verifying they still exist
+    - name: Start triggers
+      shell: pwsh
+      run: |
+        $targetTriggersAdfJson = az datafactory trigger list --resource-group ${{ inputs.target_resource_group_name }} --factory-name ${{ inputs.target_factory_name }}
+        $targetTriggersAdfObject = $targetTriggersAdfJson | ConvertFrom-Json
+        $targetTriggerNamesArray = $targetTriggersAdfObject.name
+  
+        $sourceTriggersAdfJson = az datafactory trigger list --resource-group ${{ inputs.source_resource_group_name }} --factory-name ${{ inputs.source_factory_name }}
+        $sourceTriggersAdfObject = $sourceTriggersAdfJson | ConvertFrom-Json
+        $sourceTriggerNamesArray = $sourceTriggersAdfObject.name
+        
+        $differenceArray = (Compare-Object -ReferenceObject $targetTriggerNamesArray -DifferenceObject $sourceTriggerNamesArray).InputObject
+        
+        $startedTriggerCSV = $(cat active_triggers.txt)
+        $startedTriggerArray = $startedTriggerCSV.split(",")
+  
+        $finalArray = ($startedTriggerArray | ?{$differenceArray -notcontains $_})
+        $finalCSV = $finalArray -join ","
+        echo "#########################################"
+        echo "Starting the following triggers $finalCSV"
+        echo "#########################################"
+
+        $finalArray | ForEach-Object { az datafactory trigger start --resource-group ${{ inputs.target_resource_group_name }} --factory-name ${{ inputs.target_factory_name }} --name $_}
