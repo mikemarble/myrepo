@@ -1,0 +1,55 @@
+name: parent_migration
+
+on:
+  workflow_dispatch:
+  #pull_request:
+  #  branches:
+  #    - "main" 
+  #push:
+  #  branches:
+  #    - "main" 
+
+
+
+jobs:
+  prod_migration:
+    name: prod_migration
+    # This line specifies a dependency between this job and the test_migration job
+    # needs: [test_migration]
+    # This line specifies an environment dependency.  Environments are how you can require a reviewer to approve
+    # a workflow before it can run.  This is useful if you want to make sure that the code is reviewed before it runs
+    # environment: prod
+    uses: ./.github/workflows/child_gov_adf_migration.yml
+    with:
+      tenant_id: e17c0f0c-6ff0-4c72-9fa8-b5aa41b420e8
+      subscription_id: a793e3af-d8ae-490f-9e17-a5b33025f02d
+      source_factory_name: devadf-github
+      source_resource_group_name: devadf
+      target_factory_name: prodadf-github
+      target_resource_group_name: stageadf
+      
+    secrets:
+      client_id: ${{ secrets.client_id }}
+      client_secret: ${{ secrets.client_secret }}
+
+  # Below you will find an example job if you wanted to run this on more then one environment.  
+  # and make the two jobs dependent upon each other ie prod requires test to run first.  For Clarity you would want to 
+  # put the test migration step first but since its not requried i have it after the prod migration step
+  # test_migration:
+  #   name: test_migration
+  #   # This line specifies an environment dependency.  Environments are how you can require a reviewer to approve
+  #   # a workflow before it can run.  This is useful if you want to make sure that the code is reviewed before it runs
+  #   # environment: test
+  #   uses: ./.github/workflows/child_gov_adf_migrations.yml
+  #   with:
+  #     tenant_id: 6c637512-c417-4e78-9d62-b61258e4b619
+  #     subscription_id: 2fc047b2-f5d2-4595-b6e9-59fcc4b7cda5
+  #     source_factory_name: devadf-github
+  #     source_resource_group_name: devadf
+  #     target_factory_name: testadf-github
+  #     target_resource_group_name: testadf
+      
+  #   secrets:
+  #     client_id: ${{ secrets.client_id }}
+  #     client_secret: ${{ secrets.client_secret }}
+  
