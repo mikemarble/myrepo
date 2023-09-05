@@ -144,14 +144,28 @@ jobs:
     # in the TemplateParametersForWorkspace.json file that have different values between stage and prod, such as the 
     # key vault information, storage account urls and databricks workspace information.
     # the Overrides.yml file can be found in the root folder of the main collaberation branch if modifications are required
-    - name: ADF workspace deployment
-      uses: Azure/data-factory-deploy-action@v1.2.0
+    #- name: ADF workspace deployment
+    #  uses: Azure/data-factory-deploy-action@v1.2.0
+    #  with:
+    #    resourceGroupName: ${{ inputs.target_resource_group_name }}
+    #    dataFactoryName: ${{ inputs.target_factory_name }}
+    #    armTemplateFile: './prod/armTemplate/ARMTemplateForFactory.json'
+    #    armTemplateParametersFile: './prod/armTemplate/ARMTemplateParametersForFactory.json'
+    #    additionalParameters: 'prod/ProdWorkspaceParameterOverrides.json'
+
+
+    - name: Install Az PowerShell module
+      shell: pwsh
+      run: if('${{ inputs.skipAzModuleInstallation }}' -ne 'true') { Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force }
+    - name: manual test
+      uses: azure/arm-deploy@v1
       with:
+        subscriptionId: ${{ inputs.subscription_id }}
         resourceGroupName: ${{ inputs.target_resource_group_name }}
-        dataFactoryName: ${{ inputs.target_factory_name }}
-        armTemplateFile: './prod/armTemplate/ARMTemplateForFactory.json'
-        armTemplateParametersFile: './prod/armTemplate/ARMTemplateParametersForFactory.json'
-        additionalParameters: 'prod/ProdWorkspaceParameterOverrides.json'
+        template: './prod/armTemplate/ARMTemplateForFactory.json'
+        parameters: ./prod/armTemplate/ARMTemplateParametersForFactory.json factoryName=${{ inputs.target_factory_name }} prod/ProdWorkspaceParameterOverrides.json
+        
+    
 
 
   # This job will restart the triggers that were active when the action was started
