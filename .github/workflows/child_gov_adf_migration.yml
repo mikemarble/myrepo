@@ -36,7 +36,6 @@ on:
       client_secret:
         description: 'Client Secret'
         required: true
-      
 
 
 jobs:
@@ -110,7 +109,6 @@ jobs:
     - uses: actions/checkout@v3
       with:
         path: prod
-
     # Log into Azure
     - uses: azure/login@v1
       with:
@@ -125,20 +123,14 @@ jobs:
       with:
         id: '/subscriptions/${{ inputs.subscription_id }}/resourceGroups/${{ inputs.target_resource_group_name }}/providers/Microsoft.DataFactory/factories/${{ inputs.target_factory_name }}'
         path: './prod'
-    
     - name: ADF workspace export
       uses: Azure/data-factory-export-action@v1.2.0
       with:
         id: '/subscriptions/${{ inputs.subscription_id }}/resourceGroups/${{ inputs.target_resource_group_name }}/providers/Microsoft.DataFactory/factories/${{ inputs.target_factory_name }}'
         path: './prod'
-    
     # Verify the files were built correctly
     - run: cat prod/armTemplate/ARMTemplateParametersForFactory.json
     - run: cat prod/ProdWorkspaceParameterOverrides.json
-
-
-    - run: az datafactory list
-    
     # Deploy code generated in the previous validate/publish step to the prod adf workspace
     # this step also uses the ProdWorkspaceParameterOverrides.yml file which contains override values for the variables 
     # in the TemplateParametersForWorkspace.json file that have different values between stage and prod, such as the 
@@ -152,20 +144,6 @@ jobs:
         armTemplateFile: './prod/armTemplate/ARMTemplateForFactory.json'
         armTemplateParametersFile: './prod/armTemplate/ARMTemplateParametersForFactory.json'
         additionalParameters: 'prod/ProdWorkspaceParameterOverrides.json'
-
-
-    #- name: Install Az PowerShell module
-    #  shell: pwsh
-    #  run: if('${{ inputs.skipAzModuleInstallation }}' -ne 'true') { Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force }
-    #- name: manual test
-    #  uses: azure/arm-deploy@v1
-    #  with:
-    #    subscriptionId: ${{ inputs.subscription_id }}
-    #    resourceGroupName: ${{ inputs.target_resource_group_name }}
-    #    template: './prod/armTemplate/ARMTemplateForFactory.json'
-    #    parameters: ./prod/armTemplate/ARMTemplateParametersForFactory.json factoryName=${{ inputs.target_factory_name }} prod/ProdWorkspaceParameterOverrides.json
-        
-    
 
 
   # This job will restart the triggers that were active when the action was started
