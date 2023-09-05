@@ -147,7 +147,7 @@ jobs:
         dataFactoryName: ${{ inputs.target_factory_name }}
         armTemplateFile: './prod/armTemplate/ARMTemplateForFactory.json'
         armTemplateParametersFile: './prod/armTemplate/ARMTemplateParametersForFactory.json'
-        additionalParameters: 'prod/ProdWorkspaceParameterOverrides.json'
+        additionalParameters: './prod/ProdWorkspaceParameterOverrides.json'
 
 
   # This job will restart the triggers that were active when the action was started
