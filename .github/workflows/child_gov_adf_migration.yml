@@ -116,6 +116,7 @@ jobs:
       with:
         creds: '{"clientId":"${{ secrets.CLIENT_ID }}","clientSecret":"${{ secrets.CLIENT_SECRET }}","subscriptionId":"${{ inputs.SUBSCRIPTION_ID }}","tenantId":"${{ inputs.TENANT_ID }}"}'
         enable-AzPSSession: true
+        subscription: '${{ inputs.subscription_id }}'
         #environment: 'AzureUSGovernment'
     # Build publish artifact for prod adf, this step is equivalent to pressing the publish button in a adf workspace
     # this uses the individual files from the collaberation branch and 'compiles' them into the single arm template
