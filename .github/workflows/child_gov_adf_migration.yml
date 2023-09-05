@@ -111,10 +111,6 @@ jobs:
       with:
         path: prod
 
-    - run: ls
-    - run: ls ./prod
-
-    
     # Log into Azure
     - uses: azure/login@v1
       with:
