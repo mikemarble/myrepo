@@ -136,6 +136,9 @@ jobs:
     - run: cat prod/armTemplate/ARMTemplateParametersForFactory.json
     - run: cat prod/ProdWorkspaceParameterOverrides.json
 
+
+    - run: az datafactory list
+    
     # Deploy code generated in the previous validate/publish step to the prod adf workspace
     # this step also uses the ProdWorkspaceParameterOverrides.yml file which contains override values for the variables 
     # in the TemplateParametersForWorkspace.json file that have different values between stage and prod, such as the 
